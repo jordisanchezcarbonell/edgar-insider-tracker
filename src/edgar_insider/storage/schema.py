@@ -121,15 +121,22 @@ CREATE_INDEXES = [
 def connect(db_path: Path) -> sqlite3.Connection:
     """Abre una conexión y activa FK + row_factory.
 
-    Dos cosas no obvias:
+    Tres cosas no obvias:
     1. `PRAGMA foreign_keys = ON` debe ejecutarse en cada conexión (SQLite las
        tiene OFF por defecto). Sin esto, las cláusulas REFERENCES son
        decorativas y los INSERTs inválidos pasan silenciosamente.
     2. `row_factory = sqlite3.Row` permite acceso por nombre de columna
        (`row['cik']`) además del posicional. Más legible al leer resultados.
+    3. `check_same_thread=False`: SQLite-en-Python por defecto rechaza usar la
+       conexión desde un hilo distinto al que la creó. Streamlit ejecuta cada
+       rerun en un hilo del pool, y la conexión vive cacheada en `@st.cache_resource`
+       — sin este flag, la app crashea con `sqlite3.ProgrammingError` en el 2º
+       rerun (lo descubrimos en Community Cloud). Es seguro porque Streamlit
+       serializa los reruns por sesión y todas nuestras escrituras viven en
+       scripts CLI single-threaded.
     """
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
