@@ -1,0 +1,32 @@
+# Metadata + tooling config para el proyecto.
+# Sustituye al antiguo pytest.ini y centraliza la configuración de paquetería.
+
+[project]
+name = "edgar-insider-tracker"
+version = "0.6.0"
+description = "Pipeline + dashboard to ingest, parse, analyze and visualize SEC Form 4 insider transactions"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+authors = [{ name = "Jordi Sanchez", email = "jordigw@gmail.com" }]
+dependencies = [
+    "requests>=2.32,<3",
+    "pandas>=2,<3",
+    "yfinance>=0.2,<1",
+    "streamlit>=1.40,<2",
+    "plotly>=5,<6",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<9", "pyflakes"]
+
+# Layout "src" — el paquete vive en src/edgar_insider, no en la raíz.
+# Esto evita que `import edgar_insider` resuelva al checkout del repo en vez
+# de a la versión instalada (gotcha clásico de Python packaging).
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# Config de pytest (sustituye al antiguo pytest.ini).
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

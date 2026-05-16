@@ -91,7 +91,7 @@ def main() -> int:
 
         total_rows += len(to_transaction_rows(filing, accession=accession))
 
-    print(f"\n=== Resumen ===")
+    print("\n=== Resumen ===")
     print(f"  Filings parseados:        {parsed_count}")
     print(f"  Filings fallidos:         {len(failed)}")
     print(f"  Transacciones totales:    {total_transactions}")
@@ -99,19 +99,19 @@ def main() -> int:
     print(f"  Filas tras flatten:       {total_rows}")
     print(f"  Holdings saltadas:        {skipped_holdings_total}")
 
-    print(f"\n=== Por empresa ===")
+    print("\n=== Por empresa ===")
     for ticker, n in ticker_counts.most_common():
         print(f"  {ticker:6s}  {n} filings")
 
-    print(f"\n=== Distribución por código de transacción ===")
+    print("\n=== Distribución por código de transacción ===")
     for code, n in code_counts.most_common():
         print(f"  {code}  {n:4d}")
 
-    print(f"\n=== Distribución por categoría analítica ===")
+    print("\n=== Distribución por categoría analítica ===")
     for cat, n in category_counts.most_common():
         print(f"  {cat:25s} {n:4d}")
 
-    print(f"\n=== Top 10 insiders por nº de transacciones reportadas ===")
+    print("\n=== Top 10 insiders por nº de transacciones reportadas ===")
     for insider, n in insider_counts.most_common(10):
         print(f"  {n:3d}  {insider}")
 

@@ -123,7 +123,7 @@ if only_p:
 
 st.sidebar.markdown("---")
 st.sidebar.caption(
-    "📊 [Código en GitHub](https://github.com/) · "
+    "📊 [Código en GitHub](https://github.com/jordisanchezcarbonell/edgar-insider-tracker) · "
     "Datos: [SEC EDGAR](https://www.sec.gov/edgar.shtml) + Yahoo Finance"
 )
 

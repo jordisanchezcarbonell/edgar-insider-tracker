@@ -89,7 +89,7 @@ def main() -> int:
         "insider_transactions": conn.execute("SELECT COUNT(*) FROM insider_transactions").fetchone()[0],
     }
 
-    print(f"\n=== Carga ===")
+    print("\n=== Carga ===")
     print(f"  Filings nuevos:           {new_filings}")
     print(f"  Filings ya existentes:    {skipped_filings}")
     print(f"  Transacciones nuevas:     {new_transactions}")
