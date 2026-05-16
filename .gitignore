@@ -1,0 +1,30 @@
+# Datos crudos descargados de la SEC (reproducibles ejecutando el script)
+data/
+
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Variables de entorno locales
+.env
+.env.local
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Build artefactos
+build/
+dist/
