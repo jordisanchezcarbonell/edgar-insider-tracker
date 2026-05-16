@@ -83,6 +83,24 @@ CREATE TABLE IF NOT EXISTS insider_transactions (
 )
 """
 
+# Precios diarios ajustados, cacheados desde yfinance (Fase 4).
+# A diferencia de filings/transactions, aquí usamos INSERT OR REPLACE en el
+# loader porque ajustes por split/dividendo modifican retroactivamente el
+# histórico — un re-fetch debe actualizar todo, no preservar valores viejos.
+CREATE_PRICES = """
+CREATE TABLE IF NOT EXISTS prices (
+    ticker     TEXT NOT NULL,
+    date       TEXT NOT NULL,
+    open       REAL NOT NULL,
+    high       REAL NOT NULL,
+    low        REAL NOT NULL,
+    close      REAL NOT NULL,
+    adj_close  REAL NOT NULL,
+    volume     INTEGER NOT NULL,
+    PRIMARY KEY (ticker, date)
+)
+"""
+
 # Índices para los filtros típicos de Fase 4. La UNIQUE de transactions
 # ya da índice sobre (accession_number, insider_cik, tx_index_in_filing).
 CREATE_INDEXES = [
@@ -91,6 +109,7 @@ CREATE_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_tx_code        ON insider_transactions(transaction_code)",
     "CREATE INDEX IF NOT EXISTS idx_filings_issuer ON filings(issuer_cik)",
     "CREATE INDEX IF NOT EXISTS idx_filings_date   ON filings(filing_date)",
+    "CREATE INDEX IF NOT EXISTS idx_prices_ticker  ON prices(ticker, date)",
 ]
 
 
@@ -122,6 +141,7 @@ def create_tables(conn: sqlite3.Connection) -> None:
     conn.execute(CREATE_INSIDERS)
     conn.execute(CREATE_FILINGS)
     conn.execute(CREATE_TRANSACTIONS)
+    conn.execute(CREATE_PRICES)
     for stmt in CREATE_INDEXES:
         conn.execute(stmt)
     conn.commit()

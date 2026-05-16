@@ -4,9 +4,9 @@ Pipeline en Python para descargar, parsear y analizar **Forms 3/4/5** (insider t
 
 No es un proyecto para "predecir el mercado". Es un proyecto de **ingesta y análisis riguroso de datos regulatorios reales**, honesto sobre los límites de lo que estas formas reportan.
 
-## Estado actual: Fase 3 — Almacenamiento en SQLite
+## Estado actual: Fase 4 — Análisis honesto
 
-El pipeline cubre ya descarga → parseo → almacenamiento. Los Forms 4 crudos se persisten en una BBDD SQLite normalizada (`issuers`, `insiders`, `filings`, `insider_transactions`) en `data/edgar.db`, con re-ejecuciones idempotentes garantizadas a nivel de esquema (UNIQUE + INSERT OR IGNORE) y FK activas vía `PRAGMA foreign_keys = ON`.
+El pipeline cubre descarga → parseo → almacenamiento → análisis con pandas + price impact contra precios diarios (yfinance, cacheados en la misma BBDD). Diseño explícitamente **sin scores compuestos**: cada función responde una pregunta concreta. Las estadísticas comparativas reportan `n` y marcan `warning` cuando la muestra es insuficiente — el proyecto trata la honestidad estadística como rasgo, no como caveat.
 
 ### Cómo ejecutar
 
@@ -24,27 +24,48 @@ python scripts/parse_all.py
 # Fase 3: parsea y carga a SQLite (idempotente)
 python scripts/load_all.py
 
+# Fase 4a: precios diarios desde Yahoo Finance (cachea en tabla `prices`)
+python scripts/fetch_prices.py
+
+# Fase 4b: informe completo de un ticker
+python scripts/analyze.py --ticker TSLA
+python scripts/analyze.py --ticker AAPL
+
 # Tests
 pytest
 ```
 
-La descarga cubre los últimos 20 Forms 4 de Apple, Microsoft, NVIDIA, Tesla y Meta. Tras `load_all.py`, la BBDD contiene 5 issuers, 55 insiders, 100 filings y 393 transacciones. Inspeccionable con el CLI estándar de SQLite:
+### Qué responde el análisis
 
-```bash
-sqlite3 data/edgar.db
-sqlite> SELECT transaction_code, COUNT(*) FROM insider_transactions GROUP BY 1 ORDER BY 2 DESC;
-```
+Cada función vive en `src/edgar_insider/analysis/` y devuelve un `pd.DataFrame`:
+
+- **`code_composition`** — % de cada código (P, S, F, M, A, G, D) por ticker
+- **`signal_ratio`** — % de P sobre total + % de S bajo plan 10b5-1
+- **`top_insiders_by_p`** — quién compra más, ordenado por nº y por notional
+- **`monthly_activity`** — serie mensual de transacciones por código
+- **`clustering_days`** — días en que ≥N insiders distintos compran en el mismo ticker
+- **`net_flow_by_category`** — acquired vs disposed en shares y notional
+- **`post_p_returns`** — return acumulado a +5/+10/+30 días tras cada P, vs baseline del mismo ticker. **Caveat explícito si n<30.**
+
+### Hallazgos reales del corpus
+
+Con N=393 transacciones en 5 megacaps:
+
+- **TSLA**: 21% son P, pero las 25 P proceden de un único día (Musk, sep 2025). Tras ese único evento el +30d return fue +9.5% (vs baseline +5.4%). N=1 evento real — no es una conclusión, es una anécdota.
+- **AAPL**: **0 compras P** en los últimos 20 filings. Los insiders monetizan equity comp (52% son M, 21% son S); ningún oficial pone dinero propio.
+- **De todas las S del corpus**, una mayoría aplastante está bajo plan 10b5-1 (pre-agendadas) — menos señal informativa que una S no-planificada.
 
 ## Roadmap
 
 - [x] Fase 1 — Ingesta cruda de Forms 4
 - [x] Fase 2 — Parseo de XML a estructuras tipadas + clasificación de códigos
 - [x] Fase 3 — Almacenamiento en SQLite con esquema normalizado e idempotente
-- [ ] Fase 4 — Análisis con pandas (agregaciones, métricas por insider/empresa)
+- [x] Fase 4 — Análisis con pandas + price impact (yfinance) con honestidad estadística
 - [ ] Fase 5 — Dashboard en Streamlit
 - [ ] Soporte para Forms 3 y 5
 - [ ] Modelado de holdings (`nonDerivativeHolding` / `derivativeHolding`)
 - [ ] Flag `--rebuild` para reparsear filings ya cargados
+- [ ] Benchmark vs SPY (alternativa a baseline intra-ticker)
 - [ ] CI con GitHub Actions
 
 ## Stack
