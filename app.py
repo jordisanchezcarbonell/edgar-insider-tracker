@@ -382,6 +382,28 @@ else:
             "no predictivos. No se pueden derivar p-values ni intervalos de confianza. "
             "Esta limitación es estructural, no un bug del análisis."
         )
+        with st.expander("¿Qué significa este aviso? (clic para leer)"):
+            st.markdown(
+                f"""
+**Traducción frase a frase:**
+
+- **N = {n_p_total} compras P** — tamaño de muestra. Solo hay {n_p_total} eventos para analizar.
+- **"Muestra insuficiente para inferencia"** — con tan pocos eventos no podemos generalizar al futuro ni a otros tickers con rigor estadístico.
+- **"Descriptivos, no predictivos"** — los números resumen LO QUE PASÓ en esos {n_p_total} casos, no lo que pasará la próxima vez.
+- **"Sin p-values ni intervalos de confianza"** — las herramientas estadísticas estándar darían rangos tan amplios (ej. "+7% ± 30%") que serían inútiles. Por eso ni las mostramos.
+- **"Limitación estructural"** — no es un bug a arreglar refactorizando código. Solo más datos (más empresas, más historial) lo soluciona.
+
+**Por qué este aviso aparece siempre:**
+
+Las webs y videos tipo *"insider sentiment tracker"* reportan medias del estilo "+8% sobre el mercado" usando muestras pequeñas y sin avisar. Es matemáticamente correcto pero engañoso: un solo evento (las 25 compras P de Musk del **mismo día** en septiembre 2025) puede dominar la "media" entera. Este dashboard hace lo opuesto — cuando la muestra es chica, lo grita en amarillo y se niega a calcular estadísticas inferenciales.
+
+**¿Qué N haría falta para fiarse?**
+
+Como regla informal, cientos o miles de eventos P distribuidos en múltiples tickers, sectores y periodos. La literatura académica seria (Lakonishok & Lee 2001; Cohen, Malloy & Pomorski 2012) trabaja con decenas de miles de transacciones.
+
+**Más contexto:** sección *Known limitations* del [README en GitHub](https://github.com/jordisanchezcarbonell/edgar-insider-tracker#known-limitations).
+"""
+            )
     # `warning` se omite del display: el banner amarillo ya lo dice una vez;
     # repetirlo en cada fila de la tabla es ruido visual. La columna sigue
     # presente en el output de `post_p_returns()` para consumidores
