@@ -39,6 +39,41 @@ These come straight out of running `python scripts/analyze.py --ticker XXX` on t
 
 The takeaway is structural: a naive "insider buying ratio" would mislead in opposite directions for these two tickers. Per-code, per-context analysis is the only honest read.
 
+## Data scope — what's in the corpus, what isn't
+
+A reasonable first question from anyone evaluating this project is "do you understand the boundaries of your data?". The honest answer:
+
+**What we have**
+
+- **5 issuers, fixed**: AAPL, MSFT, NVDA, TSLA, META (chosen as large-caps with consistent reporting infrastructure; see `TARGET_CIKS` in `src/edgar_insider/config.py`).
+- **20 most-recent Form 4 filings per issuer = 100 filings = 393 transactions** at the time of the committed snapshot. The number depends on when the pipeline was last run.
+- **Date range**: roughly August 2025 → May 2026 (≈9 months). Concentrated more in recent months because Form 4 filings cluster around earnings windows.
+- **Daily OHLCV from Yahoo Finance** for the same 5 tickers, January 2024 → present (~2.4 years), cached in the same SQLite DB.
+
+**What we do NOT have, even though it would be reachable from the same SEC API**
+
+- Older filings — the `submissions/CIK*.json` endpoint returns the most recent ~1000 per CIK, and `filings.files[]` exposes the historical chunks; we only consume `filings.recent` and cap at 20. Going back further is a config change (`MAX_FILINGS_PER_COMPANY`) plus a re-run, not a code change.
+- Other tickers — adding more issuers is a config dict edit and a re-run.
+- Forms 3 (initial ownership), Forms 5 (annual late-filing summary), Forms 13F (institutional holdings), Schedule 13D/G (5%+ ownership) — out of scope.
+- `nonDerivativeHolding` / `derivativeHolding` entries within Form 4s — these are position-only reports without a transaction, and we deliberately skip them (count is logged in `parse_all.py`).
+
+**Why a small sample on purpose**
+
+The project's value is the *pipeline and the analytical honesty*, not the size of the dataset. A 393-transaction corpus is large enough to exercise every parser branch, code category, and edge case (multi-owner filings, indirect ownership vehicles, 10b5-1 plans, fractional shares from RSU vesting), and small enough that re-running the full pipeline takes under a minute. Scaling to thousands of filings is a configuration change, not new code — see the roadmap.
+
+**How to verify the corpus is what we claim**
+
+```bash
+sqlite3 data/edgar.db "SELECT i.ticker, COUNT(DISTINCT f.accession_number) AS filings,
+                              COUNT(t.id) AS transactions,
+                              MIN(t.transaction_date) AS earliest,
+                              MAX(t.transaction_date) AS latest
+                       FROM issuers i
+                       JOIN filings f ON f.issuer_cik = i.cik
+                       JOIN insider_transactions t ON t.accession_number = f.accession_number
+                       GROUP BY i.ticker"
+```
+
 ## Architecture
 
 ```
@@ -99,6 +134,9 @@ pip install -r requirements.txt
 
 # Option A — use the committed snapshot
 streamlit run app.py        # opens http://localhost:8501
+# The dashboard defaults to the ticker with the most P transactions
+# (TSLA in the current corpus) so the first thing the visitor sees is
+# the most signal-rich case, not an empty AAPL screen.
 
 # Option B — rebuild the dataset from scratch (idempotent)
 python scripts/download_initial_batch.py    # SEC Forms 4
@@ -119,7 +157,7 @@ python scripts/analyze.py --ticker AAPL --windows 5 20 60
 This section is intentionally long. The most common mistake in projects like this is to oversell what insider data can tell you.
 
 - **Forms 4 are not real-time.** They must be filed within 2 business days of a transaction. The dashboard never reflects intraday activity. It is not suitable for tactical trading decisions.
-- **The corpus is tiny by statistical standards.** 393 transactions across 5 issuers. Any aggregate "average return after a P transaction" is descriptive, not inferential. The dashboard refuses to compute p-values or confidence intervals at this scale.
+- **The corpus is tiny by statistical standards.** 393 transactions across 5 issuers and ~9 months. Any aggregate "average return after a P transaction" is descriptive, not inferential. The dashboard refuses to compute p-values or confidence intervals at this scale. See the [Data scope section](#data-scope--whats-in-the-corpus-what-isnt) above for the exact boundaries and how to expand.
 - **One event dominates the entire P signal.** 25 of the 26 P transactions in the corpus come from a single Musk filing day in September 2025. Any statement like "P transactions average +9% in 30 days" is effectively a measurement of one event.
 - **We only ingest Form 4.** Forms 3 (initial ownership) and 5 (annual late-filing summary) are out of scope, as are Forms 13F (institutional holdings) and 13D/G (5%+ ownership). Coverage is partial.
 - **We skip `nonDerivativeHolding` and `derivativeHolding` entries.** These report static positions (e.g. shares held in a trust) without an underlying transaction. The skip count is reported in `scripts/parse_all.py` so the magnitude is visible.
@@ -142,11 +180,13 @@ A few choices that are not obvious from reading the code:
 - **`Decimal` in the parser, `REAL` in the database.** Parsing financial strings demands `Decimal`. SQLite `NUMERIC` is unreliable for precision, so we drop to `REAL` at the storage boundary and accept the float trade-off (documented; acceptable for prices). For exact arithmetic, round-trip through `Decimal` in Python.
 - **Charts module separate from `app.py`.** Plot functions return `go.Figure` so they're importable from notebooks or testable without Streamlit.
 - **Statistical caveats are programmatic, not optional.** Any output where `n < 30` carries an explicit `warning` field. The Streamlit banner is a prominent yellow box. This separates the project from "insider sentiment" tools that promise alpha with `n = 12`.
+- **Display formatting in `ui/labels.py`, not in storage.** The DB keeps raw SEC values (`MICROSOFT CORP`, `MURDOCH JAMES R`, `open_market_purchase`) as the source of truth. Title-casing, per-ticker display names, and a derived `Rol` column (which combines `officer_title` with the `is_director` / `is_ten_percent_owner` flags so pure directors don't show as blank) live at the presentation boundary.
+- **Default ticker is data-driven.** The dashboard opens on the ticker with the most `P` transactions in the corpus, not the alphabetical first. Otherwise a visitor's first impression of AAPL would be three empty-state messages in a row, which misrepresents what the app does.
 
 ## Testing
 
 ```bash
-pytest -v           # 38 tests across parsing, storage, and analysis
+pytest -v           # 57 tests across parsing, storage, analysis, and display labels
 ```
 
 Test fixtures are split deliberately:
@@ -179,13 +219,14 @@ I can't take screenshots from here. To populate the table at the top:
 
 ```bash
 streamlit run app.py
-# In the browser:
-# 1. Pick TSLA from the sidebar
-# 2. Screenshot the full page including KPIs + monthly chart -> docs/screenshots/overview.png
-# 3. Screenshot just the "Precio del ticker con compras P marcadas" chart -> docs/screenshots/price_with_p.png
-```
+# The dashboard opens directly on TSLA (the data-driven default) —
+# no need to switch tickers before screenshotting the demo case.
+#
+# 1. Screenshot the full page including KPIs + monthly chart
+#       -> docs/screenshots/overview.png
+# 2. Screenshot just the "Precio del ticker con compras P marcadas" chart
+#       -> docs/screenshots/price_with_p.png
 
-```bash
 mkdir -p docs/screenshots
 # drop the .png files there, then git add + commit
 ```
@@ -196,7 +237,7 @@ mkdir -p docs/screenshots
 
 **Qué es**: pipeline en Python + dashboard Streamlit que descarga Forms 4 (transacciones de insiders) de SEC EDGAR, los parsea, los guarda en SQLite normalizada, los analiza con pandas y los visualiza distinguiendo señal (`P` = compra real de mercado) de ruido (`S` bajo plan 10b5-1, `F` retención fiscal, `M` ejercicio de opciones, etc.).
 
-**Por qué importa la honestidad estadística**: el corpus actual son ~400 transacciones de 5 empresas. Cualquier "score insider sentiment" calculado con N tan pequeño es matemática-decorativa. Este proyecto reporta siempre `n` y marca con un banner amarillo cualquier comparativa con `n < 30`. No promete alfa que no tiene.
+**Por qué importa la honestidad estadística**: el corpus actual son ~400 transacciones de 5 empresas en 9 meses (muestra deliberadamente pequeña — ver sección "Data scope"). Cualquier "score insider sentiment" calculado con N tan pequeño es matemática-decorativa. Este proyecto reporta siempre `n` y marca con un banner amarillo cualquier comparativa con `n < 30`. No promete alfa que no tiene.
 
 **Hallazgos reales del corpus**:
 - TSLA: 25 de las 26 compras `P` del corpus son de un solo día de Musk (sept 2025). N efectivo = 1 evento.
