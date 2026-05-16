@@ -382,8 +382,12 @@ else:
             "no predictivos. No se pueden derivar p-values ni intervalos de confianza. "
             "Esta limitación es estructural, no un bug del análisis."
         )
+    # `warning` se omite del display: el banner amarillo ya lo dice una vez;
+    # repetirlo en cada fila de la tabla es ruido visual. La columna sigue
+    # presente en el output de `post_p_returns()` para consumidores
+    # programáticos (CLI, tests).
     st.dataframe(
-        pir.rename(columns={
+        pir.drop(columns=["warning"]).rename(columns={
             "window_days": "Horizonte (días)",
             "n": "N",
             "mean_return_after_p": "Mean post-P",
@@ -391,7 +395,6 @@ else:
             "mean_return_baseline": "Mean baseline",
             "median_return_baseline": "Median baseline",
             "diff_mean": "Diff (mean)",
-            "warning": "Caveat",
         }),
         hide_index=True,
         width="stretch",
