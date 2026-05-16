@@ -4,36 +4,38 @@ Pipeline en Python para descargar, parsear y analizar **Forms 3/4/5** (insider t
 
 No es un proyecto para "predecir el mercado". Es un proyecto de **ingesta y análisis riguroso de datos regulatorios reales**, honesto sobre los límites de lo que estas formas reportan.
 
-## Estado actual: Fase 4 — Análisis honesto
+## Estado actual: Fase 5 — Dashboard Streamlit
 
-El pipeline cubre descarga → parseo → almacenamiento → análisis con pandas + price impact contra precios diarios (yfinance, cacheados en la misma BBDD). Diseño explícitamente **sin scores compuestos**: cada función responde una pregunta concreta. Las estadísticas comparativas reportan `n` y marcan `warning` cuando la muestra es insuficiente — el proyecto trata la honestidad estadística como rasgo, no como caveat.
+Pipeline completo: descarga → parseo → almacenamiento → análisis honesto → **dashboard interactivo**. La app vive en `app.py` (raíz), reutiliza toda la capa analítica de Fase 4, y enfatiza visualmente las compras P (verde sólido) frente al ruido (grises tenues) para que se entienda de un vistazo qué es señal y qué no.
 
-### Cómo ejecutar
+### Cómo ejecutar la app
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# Fase 1: descarga (idempotente)
-python scripts/download_initial_batch.py
+# Pipeline completo (idempotente — re-ejecutar es seguro)
+python scripts/download_initial_batch.py   # Fase 1: descarga
+python scripts/load_all.py                 # Fase 3: parse + carga SQLite
+python scripts/fetch_prices.py             # Fase 4a: OHLCV desde Yahoo
 
-# Fase 2: parsea e imprime stats (no persiste)
-python scripts/parse_all.py
+# Dashboard
+streamlit run app.py                       # abre http://localhost:8501
 
-# Fase 3: parsea y carga a SQLite (idempotente)
-python scripts/load_all.py
-
-# Fase 4a: precios diarios desde Yahoo Finance (cachea en tabla `prices`)
-python scripts/fetch_prices.py
-
-# Fase 4b: informe completo de un ticker
+# CLI alternativo (mismo análisis, sin UI)
 python scripts/analyze.py --ticker TSLA
-python scripts/analyze.py --ticker AAPL
 
 # Tests
 pytest
 ```
+
+### Despliegue a Streamlit Community Cloud
+
+1. Push del repo a GitHub.
+2. En [share.streamlit.io](https://share.streamlit.io): "New app" → seleccionar el repo, branch `main`, archivo `app.py`.
+3. Deploy. La BBDD `data/edgar.db` (snapshot pequeño, ~1 MB) se commitea al repo expresamente para que la app cargue al instante sin re-correr el pipeline en el cloud.
+4. Para refrescar datos: ejecutar el pipeline localmente, `git add data/edgar.db && git commit && git push`. Community Cloud redeploya automáticamente.
 
 ### Qué responde el análisis
 
@@ -61,7 +63,7 @@ Con N=393 transacciones en 5 megacaps:
 - [x] Fase 2 — Parseo de XML a estructuras tipadas + clasificación de códigos
 - [x] Fase 3 — Almacenamiento en SQLite con esquema normalizado e idempotente
 - [x] Fase 4 — Análisis con pandas + price impact (yfinance) con honestidad estadística
-- [ ] Fase 5 — Dashboard en Streamlit
+- [x] Fase 5 — Dashboard Streamlit desplegable a Community Cloud
 - [ ] Soporte para Forms 3 y 5
 - [ ] Modelado de holdings (`nonDerivativeHolding` / `derivativeHolding`)
 - [ ] Flag `--rebuild` para reparsear filings ya cargados

@@ -1,5 +1,10 @@
-# Datos crudos descargados de la SEC (reproducibles ejecutando el script)
-data/
+# Datos crudos descargados de la SEC (reproducibles ejecutando el script).
+# Excepción: SI commiteamos data/edgar.db (snapshot de la BBDD procesada) para
+# que la app de Streamlit funcione en Community Cloud sin re-correr el pipeline.
+# Nota: usamos `data/*` (no `data/`) para que la regla negativa de abajo funcione
+# — git no permite re-incluir ficheros cuyo directorio padre esté excluido.
+data/*
+!data/edgar.db
 
 # Entornos virtuales
 .venv/

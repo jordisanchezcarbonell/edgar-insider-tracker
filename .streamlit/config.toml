@@ -1,0 +1,10 @@
+# Tema y page config para Streamlit (local y Community Cloud).
+# El primaryColor coincide con el verde de las P para coherencia visual.
+
+[theme]
+base = "light"
+primaryColor = "#16a34a"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f8fafc"
+textColor = "#0f172a"
+font = "sans serif"
