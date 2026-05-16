@@ -294,15 +294,25 @@ st.caption(
     "ventana de N días del mismo ticker (baseline intra-ticker)."
 )
 pir = cached_post_p(ticker, windows=(5, 10, 30))
+# Tres casos cualitativamente distintos:
+#   pir.empty          -> faltan precios (problema operativo)
+#   all(pir["n"] == 0) -> no hay ninguna P para este ticker (no aplica análisis)
+#   any(n < 30)        -> hay datos pero pocos (caveat estadístico obligatorio)
+#   all(n >= 30)       -> tabla limpia sin caveat
 if pir.empty:
     st.info(
-        "Sin datos: o no hay compras P, o falta cargar precios "
-        "(`python scripts/fetch_prices.py`)."
+        f"No hay precios cargados para {ticker}. "
+        "Ejecuta `python scripts/fetch_prices.py` para habilitar este análisis."
+    )
+elif (pir["n"] == 0).all():
+    st.info(
+        f"{ticker} no tiene compras P (mercado abierto) en el corpus actual. "
+        "No aplica análisis de price impact — no hay eventos que medir. "
+        "Mira el gráfico de precio de arriba para el contexto."
     )
 else:
-    has_warning = pir["warning"].notna().any()
-    if has_warning:
-        n_p_total = int(pir["n"].iloc[0])
+    n_p_total = int(pir["n"].iloc[0])
+    if n_p_total < 30:
         st.warning(
             f"⚠️ **Caveat estadístico obligatorio**: N = {n_p_total} compras P. "
             "Muestra insuficiente para inferencia. Estos números son **descriptivos**, "
