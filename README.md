@@ -4,9 +4,9 @@ Pipeline en Python para descargar, parsear y analizar **Forms 3/4/5** (insider t
 
 No es un proyecto para "predecir el mercado". Es un proyecto de **ingesta y análisis riguroso de datos regulatorios reales**, honesto sobre los límites de lo que estas formas reportan.
 
-## Estado actual: Fase 2 — Parseo de Forms 4
+## Estado actual: Fase 3 — Almacenamiento en SQLite
 
-Fase 1 descarga los Forms 4 crudos. Fase 2 los convierte en dataclasses tipadas (`ParsedFiling`, `Transaction`, `Insider`, `Issuer`) y aplana a filas listas para análisis. Cada transacción se categoriza con cuidado (p. ej. distinguir **F**=tax withholding de **S**=open-market sale — confundirlas corrompería cualquier análisis de sentimiento insider).
+El pipeline cubre ya descarga → parseo → almacenamiento. Los Forms 4 crudos se persisten en una BBDD SQLite normalizada (`issuers`, `insiders`, `filings`, `insider_transactions`) en `data/edgar.db`, con re-ejecuciones idempotentes garantizadas a nivel de esquema (UNIQUE + INSERT OR IGNORE) y FK activas vía `PRAGMA foreign_keys = ON`.
 
 ### Cómo ejecutar
 
@@ -18,24 +18,33 @@ pip install -r requirements.txt
 # Fase 1: descarga (idempotente)
 python scripts/download_initial_batch.py
 
-# Fase 2: parsea todo lo descargado e imprime stats agregadas
+# Fase 2: parsea e imprime stats (no persiste)
 python scripts/parse_all.py
+
+# Fase 3: parsea y carga a SQLite (idempotente)
+python scripts/load_all.py
 
 # Tests
 pytest
 ```
 
-La descarga cubre los últimos 20 Forms 4 de Apple, Microsoft, NVIDIA, Tesla y Meta (CIK fija) en `data/raw/form4/{cik}/{accession}/`. El bulk-parse procesa los 100 filings, valida la distribución de códigos contra el corpus, y no persiste nada — la persistencia llega en Fase 3.
+La descarga cubre los últimos 20 Forms 4 de Apple, Microsoft, NVIDIA, Tesla y Meta. Tras `load_all.py`, la BBDD contiene 5 issuers, 55 insiders, 100 filings y 393 transacciones. Inspeccionable con el CLI estándar de SQLite:
+
+```bash
+sqlite3 data/edgar.db
+sqlite> SELECT transaction_code, COUNT(*) FROM insider_transactions GROUP BY 1 ORDER BY 2 DESC;
+```
 
 ## Roadmap
 
 - [x] Fase 1 — Ingesta cruda de Forms 4
 - [x] Fase 2 — Parseo de XML a estructuras tipadas + clasificación de códigos
-- [ ] Fase 3 — Almacenamiento en SQLite con esquema normalizado
+- [x] Fase 3 — Almacenamiento en SQLite con esquema normalizado e idempotente
 - [ ] Fase 4 — Análisis con pandas (agregaciones, métricas por insider/empresa)
 - [ ] Fase 5 — Dashboard en Streamlit
 - [ ] Soporte para Forms 3 y 5
 - [ ] Modelado de holdings (`nonDerivativeHolding` / `derivativeHolding`)
+- [ ] Flag `--rebuild` para reparsear filings ya cargados
 - [ ] CI con GitHub Actions
 
 ## Stack

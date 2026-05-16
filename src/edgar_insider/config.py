@@ -34,3 +34,7 @@ MAX_FILINGS_PER_COMPANY = 20
 # Usamos rutas absolutas para que el script funcione igual desde cualquier cwd.
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 RAW_DATA_DIR = PROJECT_ROOT / "data" / "raw" / "form4"
+
+# SQLite es un único fichero — portable, sin servidor. Vive junto a data/raw/
+# y queda gitignored (toda data/ ya lo está).
+DB_PATH = PROJECT_ROOT / "data" / "edgar.db"
