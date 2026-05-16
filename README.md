@@ -39,7 +39,7 @@ These come straight out of running `python scripts/analyze.py --ticker XXX` on t
 
 The takeaway is structural: a naive "insider buying ratio" would mislead in opposite directions for these two tickers. Per-code, per-context analysis is the only honest read.
 
-## Data scope — what's in the corpus, what isn't
+## Data scope: what's in the corpus, what isn't
 
 A reasonable first question from anyone evaluating this project is "do you understand the boundaries of your data?". The honest answer:
 
@@ -157,7 +157,7 @@ python scripts/analyze.py --ticker AAPL --windows 5 20 60
 This section is intentionally long. The most common mistake in projects like this is to oversell what insider data can tell you.
 
 - **Forms 4 are not real-time.** They must be filed within 2 business days of a transaction. The dashboard never reflects intraday activity. It is not suitable for tactical trading decisions.
-- **The corpus is tiny by statistical standards.** 393 transactions across 5 issuers and ~9 months. Any aggregate "average return after a P transaction" is descriptive, not inferential. The dashboard refuses to compute p-values or confidence intervals at this scale. See the [Data scope section](#data-scope--whats-in-the-corpus-what-isnt) above for the exact boundaries and how to expand.
+- **The corpus is tiny by statistical standards.** 393 transactions across 5 issuers and ~9 months. Any aggregate "average return after a P transaction" is descriptive, not inferential. The dashboard refuses to compute p-values or confidence intervals at this scale. See the [Data scope section](#data-scope-whats-in-the-corpus-what-isnt) above for the exact boundaries and how to expand.
 - **One event dominates the entire P signal.** 25 of the 26 P transactions in the corpus come from a single Musk filing day in September 2025. Any statement like "P transactions average +9% in 30 days" is effectively a measurement of one event.
 - **We only ingest Form 4.** Forms 3 (initial ownership) and 5 (annual late-filing summary) are out of scope, as are Forms 13F (institutional holdings) and 13D/G (5%+ ownership). Coverage is partial.
 - **We skip `nonDerivativeHolding` and `derivativeHolding` entries.** These report static positions (e.g. shares held in a trust) without an underlying transaction. The skip count is reported in `scripts/parse_all.py` so the magnitude is visible.

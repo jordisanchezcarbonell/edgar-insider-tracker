@@ -93,17 +93,19 @@ if not tickers:
     st.stop()
 
 
-@st.cache_data(show_spinner=False)
-def _best_demo_ticker(available: tuple[str, ...]) -> str:
+def _best_demo_ticker(available: list[str]) -> str:
     """Default al ticker con MÁS compras P en el corpus.
 
     Razón: abrir con AAPL (alfabético) muestra '0% compras P' tres veces
     seguidas — degenerado para alguien que entra a ver la app por primera
     vez. Defaulteamos al ticker que mejor demuestra qué hace el dashboard.
     Fallback: primer ticker alfabético si nadie tiene P.
+
+    Sin caché a propósito: es una query de 5 filas, cachearla oculta el
+    problema de invalidación (la query depende de `get_conn()`, no del
+    argumento) y el coste real es ~1 ms.
     """
-    conn = get_conn()
-    row = conn.execute(
+    row = get_conn().execute(
         "SELECT i.ticker FROM insider_transactions t "
         "JOIN filings f ON f.accession_number = t.accession_number "
         "JOIN issuers i ON i.cik = f.issuer_cik "
@@ -113,7 +115,7 @@ def _best_demo_ticker(available: tuple[str, ...]) -> str:
     return row[0] if row and row[0] in available else available[0]
 
 
-default_ticker = _best_demo_ticker(tuple(tickers))
+default_ticker = _best_demo_ticker(tickers)
 ticker = st.sidebar.selectbox("Empresa", tickers, index=tickers.index(default_ticker))
 tx_all = cached_transactions(ticker)
 
