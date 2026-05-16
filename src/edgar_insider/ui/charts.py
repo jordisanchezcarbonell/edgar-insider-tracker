@@ -17,6 +17,8 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
+from edgar_insider.ui.labels import CODE_LEGEND_LABELS
+
 # Paleta jerárquica: P y S son los códigos "decisión consciente"; el resto
 # es típicamente vesting / ejercicio / impuestos (no señal direccional).
 CODE_COLORS: dict[str, str] = {
@@ -31,6 +33,11 @@ CODE_COLORS: dict[str, str] = {
 
 # Orden visual en stacks/leyendas: lo importante arriba.
 CODE_ORDER = ["P", "S", "F", "M", "A", "G", "D"]
+
+
+def _code_legend(code: str) -> str:
+    """Texto humano para la leyenda. Fallback al código crudo si no mapeado."""
+    return CODE_LEGEND_LABELS.get(code, code)
 
 
 def _empty_figure(message: str) -> go.Figure:
@@ -57,21 +64,31 @@ def monthly_activity_chart(monthly_df: pd.DataFrame) -> go.Figure:
 
     Espera el output de `metrics.monthly_activity`: columnas
     `ticker, year_month, transaction_code, count`.
+
+    La leyenda muestra etiquetas humanas (`"P · Compra de mercado"`) en
+    vez del código crudo. Plotly no separa "color key" de "legend label",
+    así que mapeamos a una columna derivada antes de pintar.
     """
     if monthly_df.empty:
         return _empty_figure("Sin transacciones para los filtros seleccionados")
 
+    df = monthly_df.copy()
+    df["code_label"] = df["transaction_code"].map(_code_legend).fillna(df["transaction_code"])
+    # Re-mapeamos las claves de colores y orden a las etiquetas humanas.
+    color_map = {_code_legend(c): col for c, col in CODE_COLORS.items()}
+    label_order = [_code_legend(c) for c in CODE_ORDER]
+
     fig = px.bar(
-        monthly_df,
+        df,
         x="year_month",
         y="count",
-        color="transaction_code",
-        color_discrete_map=CODE_COLORS,
-        category_orders={"transaction_code": CODE_ORDER},
+        color="code_label",
+        color_discrete_map=color_map,
+        category_orders={"code_label": label_order},
         labels={
             "year_month": "Mes",
             "count": "Nº transacciones",
-            "transaction_code": "Código",
+            "code_label": "Código",
         },
     )
     fig.update_layout(
@@ -81,7 +98,10 @@ def monthly_activity_chart(monthly_df: pd.DataFrame) -> go.Figure:
         height=380,
         plot_bgcolor="white",
     )
-    fig.update_xaxes(showgrid=False)
+    # Forzamos categorical: si dejamos que Plotly infiera el tipo, parsea
+    # "2026-03" como timestamp y elige ticks irregulares ("Feb 1, Mar 29…")
+    # que confunden. Como label discreta, cada mes se muestra una sola vez.
+    fig.update_xaxes(showgrid=False, type="category")
     fig.update_yaxes(gridcolor="#e2e8f0")
     return fig
 

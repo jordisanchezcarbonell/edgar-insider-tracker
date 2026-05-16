@@ -31,6 +31,11 @@ from edgar_insider.analysis.price_impact import post_p_returns  # noqa: E402
 from edgar_insider.analysis.queries import list_tickers, load_transactions  # noqa: E402
 from edgar_insider.config import DB_PATH  # noqa: E402
 from edgar_insider.storage.schema import connect  # noqa: E402
+from edgar_insider.ui.labels import (  # noqa: E402
+    format_category,
+    format_insider_name,
+    format_issuer_name,
+)
 
 
 def _section(title: str) -> None:
@@ -67,7 +72,8 @@ def main() -> int:
         return 2
 
     tx = load_transactions(conn, ticker=args.ticker)
-    issuer_name = tx["issuer_name"].iloc[0] if not tx.empty else ""
+    raw_issuer = tx["issuer_name"].iloc[0] if not tx.empty else ""
+    issuer_name = format_issuer_name(args.ticker, raw_issuer)
     n_tx = len(tx)
     n_insiders = tx["insider_cik"].nunique() if not tx.empty else 0
     n_filings = tx["accession_number"].nunique() if not tx.empty else 0
@@ -76,7 +82,10 @@ def main() -> int:
     print(f"  Transacciones: {n_tx}  |  Insiders únicos: {n_insiders}  |  Filings: {n_filings}")
 
     _section("Composición de códigos")
-    _print_df(code_composition(tx))
+    comp = code_composition(tx)
+    if not comp.empty:
+        comp["transaction_category"] = comp["transaction_category"].map(format_category)
+    _print_df(comp)
 
     _section("Señal vs ruido")
     sig = signal_ratio(tx)
@@ -91,7 +100,10 @@ def main() -> int:
         )
 
     _section(f"Top {args.top} insiders por compras P")
-    _print_df(top_insiders_by_p(tx, top_n=args.top))
+    top = top_insiders_by_p(tx, top_n=args.top)
+    if not top.empty:
+        top["insider_name"] = top["insider_name"].map(format_insider_name)
+    _print_df(top)
 
     _section("Actividad mensual (cuenta por código)")
     _print_df(monthly_activity(tx), max_rows=60)
@@ -100,7 +112,10 @@ def main() -> int:
     _print_df(clustering_days(tx, min_distinct_insiders=2))
 
     _section("Net flow por categoría (acquired - disposed)")
-    _print_df(net_flow_by_category(tx))
+    nf = net_flow_by_category(tx)
+    if not nf.empty:
+        nf["transaction_category"] = nf["transaction_category"].map(format_category)
+    _print_df(nf)
 
     _section(f"Price impact post-P (horizontes {args.windows} días)")
     pir = post_p_returns(conn, args.ticker, windows=tuple(args.windows))

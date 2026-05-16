@@ -34,6 +34,12 @@ from edgar_insider.ui.charts import (  # noqa: E402
     monthly_activity_chart,
     price_with_p_markers_chart,
 )
+from edgar_insider.ui.labels import (  # noqa: E402
+    format_category,
+    format_insider_name,
+    format_issuer_name,
+    format_role,
+)
 
 # ---------------------------------------------------------------------------
 # Setup
@@ -86,7 +92,29 @@ if not tickers:
     st.error("La BBDD existe pero está vacía. Ejecuta `python scripts/load_all.py`.")
     st.stop()
 
-ticker = st.sidebar.selectbox("Empresa", tickers, index=0)
+
+@st.cache_data(show_spinner=False)
+def _best_demo_ticker(available: tuple[str, ...]) -> str:
+    """Default al ticker con MÁS compras P en el corpus.
+
+    Razón: abrir con AAPL (alfabético) muestra '0% compras P' tres veces
+    seguidas — degenerado para alguien que entra a ver la app por primera
+    vez. Defaulteamos al ticker que mejor demuestra qué hace el dashboard.
+    Fallback: primer ticker alfabético si nadie tiene P.
+    """
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT i.ticker FROM insider_transactions t "
+        "JOIN filings f ON f.accession_number = t.accession_number "
+        "JOIN issuers i ON i.cik = f.issuer_cik "
+        "WHERE t.transaction_code = 'P' "
+        "GROUP BY i.ticker ORDER BY COUNT(*) DESC LIMIT 1"
+    ).fetchone()
+    return row[0] if row and row[0] in available else available[0]
+
+
+default_ticker = _best_demo_ticker(tuple(tickers))
+ticker = st.sidebar.selectbox("Empresa", tickers, index=tickers.index(default_ticker))
 tx_all = cached_transactions(ticker)
 
 # Rango de fechas: por defecto, cubre todo lo disponible para el ticker.
@@ -143,7 +171,7 @@ tx = tx_all[
 # Header
 # ---------------------------------------------------------------------------
 
-issuer_name = tx_all["issuer_name"].iloc[0]
+issuer_name = format_issuer_name(ticker, tx_all["issuer_name"].iloc[0])
 st.title(f"{ticker} — {issuer_name}")
 st.caption(
     "Análisis de actividad insider sobre Forms 4 de SEC EDGAR. "
@@ -206,21 +234,25 @@ top = top_insiders_by_p(tx, top_n=10)
 if top.empty:
     st.info("Ningún insider hizo compras P en este rango/filtros.")
 else:
+    top_display = top[["insider_name", "n_p", "notional_usd", "first_p_date", "last_p_date"]].copy()
+    top_display["insider_name"] = top_display["insider_name"].map(format_insider_name)
     st.dataframe(
-        top[["insider_name", "n_p", "notional_usd", "first_p_date", "last_p_date"]].rename(
-            columns={
-                "insider_name": "Insider",
-                "n_p": "Nº compras",
-                "notional_usd": "Notional USD",
-                "first_p_date": "1ª compra",
-                "last_p_date": "Última compra",
-            }
-        ),
+        top_display.rename(columns={
+            "insider_name": "Insider",
+            "n_p": "Nº compras",
+            "notional_usd": "Notional USD",
+            "first_p_date": "1ª compra",
+            "last_p_date": "Última compra",
+        }),
         hide_index=True,
         width="stretch",
         column_config={
             "Notional USD": st.column_config.NumberColumn(format="$%.0f"),
         },
+    )
+    st.caption(
+        "Nombres siguen convención SEC: `Apellido Nombre [Inicial]` "
+        "(no se reordena por riesgo con apellidos compuestos)."
     )
 
 # ---------------------------------------------------------------------------
@@ -228,19 +260,47 @@ else:
 # ---------------------------------------------------------------------------
 
 st.subheader("Transacciones (búsqueda y ordenación en columnas)")
+# Derivamos "Rol" del título de officer + booleanos de relación. Sin este
+# fallback, la mitad de los directores puros (sin officer_title) saldrían
+# con celda vacía — engañoso porque visualmente parece dato faltante.
 display_cols = [
     "transaction_date", "insider_name", "officer_title",
+    "is_director", "is_officer", "is_ten_percent_owner", "is_other",
     "transaction_code", "transaction_category",
     "shares", "price_per_share", "ownership_nature",
     "under_10b5_1_plan", "indirect_owner_explanation",
 ]
 tx_display = tx[display_cols].copy()
 tx_display["transaction_date"] = tx_display["transaction_date"].dt.strftime("%Y-%m-%d")
+tx_display["insider_name"] = tx_display["insider_name"].map(format_insider_name)
+tx_display["transaction_category"] = tx_display["transaction_category"].map(format_category)
+tx_display["role"] = tx_display.apply(
+    lambda r: format_role(
+        r["officer_title"],
+        is_director=bool(r["is_director"]),
+        is_officer=bool(r["is_officer"]),
+        is_ten_percent_owner=bool(r["is_ten_percent_owner"]),
+        is_other=bool(r["is_other"]),
+    ),
+    axis=1,
+)
+# Reemplazamos officer_title por la columna derivada; las flags booleanas
+# ya no aportan al lector y las quitamos del display.
+tx_display = tx_display.drop(
+    columns=["officer_title", "is_director", "is_officer",
+             "is_ten_percent_owner", "is_other"]
+)
+# Reordenamos para que Rol salga justo después de Insider.
+ordered_cols = ["transaction_date", "insider_name", "role"] + [
+    c for c in tx_display.columns
+    if c not in ("transaction_date", "insider_name", "role")
+]
+tx_display = tx_display[ordered_cols]
 st.dataframe(
     tx_display.rename(columns={
         "transaction_date": "Fecha",
         "insider_name": "Insider",
-        "officer_title": "Cargo",
+        "role": "Rol",
         "transaction_code": "Cód.",
         "transaction_category": "Categoría",
         "shares": "Shares",
@@ -264,6 +324,7 @@ st.caption(
     "porque ejercer una opción es adquirir acciones + disponer del derivado."
 )
 nf = net_flow_by_category(tx)
+nf["transaction_category"] = nf["transaction_category"].map(format_category)
 st.dataframe(
     nf.rename(columns={
         "transaction_category": "Categoría",
